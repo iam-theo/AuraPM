@@ -5,11 +5,22 @@ import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import trackerRouter from "./src/modules/project-tracker/index.ts";
+import v1Router from "./src/interface/v1.router.ts";
 import { dbState } from "./src/modules/project-tracker/db.ts";
 import { ChatService } from "./src/modules/project-tracker/modules/chat/service.ts";
+import { errorHandler } from "./src/shared/infrastructure/error-handler.ts";
+import swaggerUi from "swagger-ui-express";
+import { specs } from "./src/shared/infrastructure/swagger.ts";
+import * as admin from "firebase-admin";
+import { getApps, initializeApp } from "firebase-admin/app";
 
 // Initialize environment variables
 dotenv.config();
+
+// Initialize Firebase Admin
+if (getApps().length === 0) {
+  initializeApp();
+}
 
 async function startServer() {
   const app = express();
@@ -54,6 +65,12 @@ async function startServer() {
   // Mount the Enterprise Project Execution Tracker Module
   app.use("/api/project-tracker", trackerRouter);
 
+  // Enterprise API v1
+  app.use("/api/v1", v1Router);
+
+  // Swagger Documentation
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+
   // Health Check Endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "healthy", timestamp: new Date().toISOString() });
@@ -75,6 +92,9 @@ async function startServer() {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  // Global Error Handler (Must be after all routes)
+  app.use(errorHandler);
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Enterprise Platform Service successfully bound on port ${PORT}`);
